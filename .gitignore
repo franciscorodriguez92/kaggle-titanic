@@ -36,4 +36,8 @@ vignettes/*.pdf
 *.utf8.md
 *.knit.md
 
-# End of https://www.gitignore.io/api/r
+# data
+produced_data/
+raw_data/
+Data/
+kaggle-titanic-master/
