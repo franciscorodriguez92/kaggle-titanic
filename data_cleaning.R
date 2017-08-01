@@ -29,45 +29,45 @@ aggr(train, prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sort
 
 # Representation Survived vs important features (https://www.kaggle.com/headsortails/tidy-titarnic)
 
-p_age = ggplot(train) +
+ggplot(train) +
   geom_freqpoly(mapping = aes(x = Age, color = Survived), binwidth = 1) +
   guides(fill=FALSE) +
-  theme(legend.position = "none")
+  theme()
+# Younger people died less but it doesnt improve the separability too much
 
-p_sex = ggplot(train, mapping = aes(x = Sex, fill = Survived)) +
+ggplot(train, mapping = aes(x = Sex, fill = Survived)) +
   geom_bar(stat='count', position='fill') +
   labs(x = 'Sex') +
   scale_fill_discrete(name="Surv") +
-  theme_few()
+  theme()
+# important feature (75% female -> survived, <25% male -> died)
 
-p_class = ggplot(train, mapping = aes(x = Pclass, fill = Survived, colour = Survived)) +
+ggplot(train, mapping = aes(x = Pclass, fill = Survived, colour = Survived)) +
   geom_bar(stat='count', position='fill') +
   labs(x = 'Pclass') +
-  theme(legend.position = "none")
+  theme()
+# Important feature too
 
-p_emb = ggplot(train, aes(Embarked, fill = Survived)) +
+ggplot(train, aes(Embarked, fill = Survived)) +
   geom_bar(stat='count', position='fill') +
   labs(x = 'Embarked') +
-  theme(legend.position = "none")
+  theme()
 
-p_sib = ggplot(train, aes(SibSp, fill = Survived)) +
+ggplot(train, aes(SibSp, fill = Survived)) +
   geom_bar(stat='count', position='fill') +
   labs(x = 'SibSp') +
-  theme(legend.position = "none")
+  theme()
 
-p_par = ggplot(train, aes(Parch, fill = Survived)) +
+ggplot(train, aes(Parch, fill = Survived)) +
   geom_bar(stat='count', position='fill') +
   labs(x = 'Parch') +
-  theme(legend.position = "none")
+  theme()
 
-p_fare = ggplot(train) +
+ggplot(train) +
   geom_freqpoly(mapping = aes(Fare, color = Survived), binwidth = 0.05) +
   scale_x_log10() +
-  theme(legend.position = "none")
+  theme()
 
-
-layout <- matrix(c(1,1,2,3,3,4,5,6,7),3,3,byrow=TRUE)
-multiplot(p_age, p_sex, p_fare, p_class, p_emb, p_sib, p_par, layout=layout)
 
 # Correlations between numeric variables
 library("corrplot")
@@ -85,15 +85,17 @@ train %>%
   cor(use="complete.obs") %>%
   corrplot(type="lower", diag=FALSE)
 
+
 # Impute NAs: Age, Embarked
 combine  <- bind_rows(train, test) # bind training & test data
 combine_lm <- combine %>% filter(!is.na(Age)) %>% select(Age,Pclass, Sex, SibSp, Parch, Fare) %>%
   mutate(Sex = if_else(Sex == "male", 1, 0)) %>% 
   mutate_all(funs(as.numeric))
-# Another approach: Find closest to instances with NA and replace by a statistics of the neighbourhood
+# TO-DO: Find closest to instances with NA and replace by a statistic of the neighbourhood
 age.mod <- lm(Age ~ Pclass + Sex +
                 SibSp + Parch + Fare, data = combine_lm)
-combine$Age[is.na(combine$Age)] <- predict(age.mod, combine %>% mutate(Sex = if_else(Sex == "male", 1, 0)))[is.na(combine$Age)]
+combine$Age[is.na(combine$Age)] <- predict(age.mod, combine %>% mutate(
+  Sex = if_else(Sex == "male", 1, 0), Pclass = as.numeric(Pclass)) )[is.na(combine$Age)]
 combine <- combine %>%
   mutate(Embarked = as.character(Embarked)) %>%
   mutate(Embarked = case_when(
@@ -119,20 +121,22 @@ combine <- combine %>%
 # New features (Engineered)
 library("stringr")
 combine <- mutate(combine,
-                  fclass = factor(log10(Fare+1) %/% 1),
-                  age_known = factor(!is.na(Age)),
-                  cabin_known = factor(!is.na(Cabin)),
-                  title_orig = factor(str_extract(Name, "[A-Z][a-z]*\\.")),
-                  young = factor( if_else(Age<=30, 1, 0, missing = 0) | (title_orig %in% c('Master.','Miss.','Mlle.')) ),
-                  child = Age<10,
-                  family = SibSp + Parch,
-                  alone = (SibSp == 0) & (Parch == 0),
-                  large_family = (SibSp > 2) | (Parch > 3),
-                  deck = if_else(is.na(Cabin),"U",str_sub(Cabin,1,1)),
-                  ttype = str_sub(Ticket,1,1)
+  fclass = factor(log10(Fare+1) %/% 1),
+  age_known = factor(!is.na(Age)),
+  cabin_known = factor(!is.na(Cabin)),
+  title_orig = factor(str_extract(Name, "[A-Z][a-z]*\\.")),
+  young = factor( if_else(Age<=30, 1, 0, missing = 0) | (title_orig %in% c('Master.','Miss.','Mlle.')) ),
+  child = Age<10,
+  family = SibSp + Parch,
+  alone = (SibSp == 0) & (Parch == 0),
+  large_family = (SibSp > 2) | (Parch > 3),
+  deck = if_else(is.na(Cabin),"U",str_sub(Cabin,1,1)),
+  ttype = str_sub(Ticket,1,1)
 )
 library("forcats")
 combine <- mutate(combine, title = fct_lump(title_orig, n=4))
 
-train_cleaned <- combine %>% filter(!is.na(Survived))
-test_cleaned <- combine %>% filter(is.na(Survived))
+train_cleaned <- combine %>% filter(!is.na(Survived)) %>% select(-PassengerId, -Name, -Ticket)
+write_csv(train_cleaned, "produced_data/train_cleaned.csv")
+test_cleaned <- combine %>% filter(is.na(Survived)) %>% select(-PassengerId, -Name, -Ticket)
+write_csv(test_cleaned, "produced_data/test_cleaned.csv")
