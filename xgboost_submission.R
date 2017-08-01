@@ -23,7 +23,7 @@ test <- combine %>% filter(is.na(Survived)) %>% select(Survived, Pclass, Sex, Ag
 
 
 library("xgboost")
-dtrain <- xgb.DMatrix(data = as.matrix(select(train[1:680,], -Survived)),label = train[1:680,]$Survived)
+dtrain <- xgb.DMatrix(data = as.matrix(select(train, -Survived)),label = train$Survived)
 dtest <- xgb.DMatrix(data = as.matrix(select(train[681:891,], -Survived)),label=train[681:891,]$Survived)
 dtest_real <- xgb.DMatrix(data = as.matrix(select(test, -Survived)), label=test$Survived)
 #default parameters
@@ -34,7 +34,7 @@ params <- list(
   gamma=0,
   max_depth=6,
   min_child_weight=1,
-  subsample=1,
+  subsample=0.5,
   colsample_bytree=1
 )
 
@@ -54,7 +54,7 @@ xgbcv <- xgb.cv(params = params
 xgb1 <- xgb.train(
   params = params
   ,data = dtrain
-  ,nrounds = 21
+  ,nrounds = 6
   ,watchlist = list(val=dtest,train=dtrain)
   ,print.every.n = 10
   ,early.stop.round = 10
@@ -76,7 +76,7 @@ predictions <- ifelse(predictions > 0.5,1,0)
 
 submission <- read_csv("./raw_data/test.csv") %>% select(PassengerId)
 submission$Survived <- predictions
-write.csv(submission, file = "./produced_data/submit2_xgboost.csv", row.names = FALSE)
+write.csv(submission, file = "./produced_data/submit5_xgboost.csv", row.names = FALSE)
 
 
 # Hyperparameter Tuning
@@ -95,15 +95,16 @@ rmseErrorsHyperparameters <- apply(searchGridSubCol, 1, function(parameterList){
   currentSubsampleRate <- parameterList[["subsample"]]
   currentColsampleRate <- parameterList[["colsample_bytree"]]
 
-  xgboostModelCV <- xgb.cv(data =  DMMatrixTrain, nrounds = ntrees, nfold = 5, showsd = TRUE,
-                           metrics = "rmse", verbose = TRUE, "eval_metric" = "rmse",
-                           "objective" = "binary:logistic", "max.depth" = 6, "eta" = 2/ntrees,
+  xgboostModelCV <- xgb.cv(data =  DMMatrixTrain, nrounds = 21 , nfold = 5, showsd = TRUE,
+                           metrics = "error", verbose = TRUE, "eval_metric" = "error",
+                           "objective" = "binary:logistic", "max.depth" = 6, "eta" = 0.7,
                            "subsample" = currentSubsampleRate, "colsample_bytree" = currentColsampleRate)
 
   xvalidationScores <- xgboostModelCV
   #Save rmse of the last iteration
   rmse <- tail(xvalidationScores$test.rmse.mean, 1)
 
+  print (c(c(rmse, currentSubsampleRate, currentColsampleRate)))
   return(c(rmse, currentSubsampleRate, currentColsampleRate))
 
 })
